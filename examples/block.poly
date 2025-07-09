@@ -1,0 +1,177 @@
+# Example Polycrate block configuration
+name: redis-cache
+display_name: "Redis Cache"
+description: "High-performance in-memory cache using Redis"
+kind: k8sapp
+type: kv
+flavor: redis
+version: "7.0.0"
+
+labels:
+  category: "cache"
+  tier: "data"
+
+icon_url: "https://redis.io/images/redis-white.png"
+git_repository_url: "https://github.com/redis/redis"
+license: "BSD-3-Clause"
+license_url: "https://github.com/redis/redis/blob/unstable/COPYING"
+website_url: "https://redis.io"
+documentation_url: "https://redis.io/documentation"
+
+config:
+  # Redis-specific configuration
+  connection:
+    endpoint: "redis"
+    port: 6379
+    password: "{{ .Block.Config.Auth.Password }}"
+    database: 0
+    tls:
+      enabled: false
+      accept_invalid_certificate: false
+      accept_invalid_hostname: false
+
+  # Kubernetes namespace
+  namespace: "cache"
+  create_namespace: true
+
+  # Helm chart configuration
+  chart:
+    name: "redis"
+    version: "17.3.7"
+    oci: false
+    auth:
+      enabled: true
+      username: "redis-user"
+      password: "{{ .Workspace.Config.Globals.redis_password }}"
+      registry: "registry.bitnami.com"
+    repo:
+      name: "bitnami"
+      url: "https://charts.bitnami.com/bitnami"
+
+  # Persistence configuration
+  persistence:
+    enabled: true
+    size: "8Gi"
+    access_mode: "ReadWriteOnce"
+    storage_class: "ssd"
+
+  # Update strategy
+  update_strategy:
+    type: "RollingUpdate"
+
+  # Ingress configuration
+  ingress:
+    enabled: false
+    class: "nginx"
+    host: "redis.{{ .Workspace.Config.Globals.domain }}"
+    extra_annotations:
+      nginx.ingress.kubernetes.io/tcp-services-configmap: "default/tcp-services"
+    extra_hosts: []
+    tls:
+      enabled: false
+      letsencrypt:
+        issuer: "letsencrypt-prod"
+
+  # Monitoring
+  monitoring:
+    enabled: true
+    vmservicescrape:
+      enabled: true
+
+  # Backup configuration
+  backup:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+
+  # Dependencies
+  dependencies:
+    storage: "persistent-volume"
+
+  # Extra manifests
+  extra_manifests: []
+
+  # Application-specific settings
+  app:
+    maxmemory: "512mb"
+    maxmemory_policy: "allkeys-lru"
+    save: "900 1"
+    appendonly: "yes"
+    cluster:
+      enabled: false
+      nodes: 3
+      replicas: 1
+    sentinel:
+      enabled: false
+      nodes: 3
+
+actions:
+  - name: install
+    description: "Install Redis using Helm"
+    labels:
+      category: "deployment"
+    script:
+      - "helm repo add bitnami https://charts.bitnami.com/bitnami"
+      - "helm repo update"
+      - "kubectl create namespace {{ .Block.Config.Namespace }} --dry-run=client -o yaml | kubectl apply -f -"
+      - "helm install {{ .Block.Name }} bitnami/redis --namespace {{ .Block.Config.Namespace }} --set auth.password={{ .Block.Config.Connection.Password }} --set master.persistence.size={{ .Block.Config.Persistence.Size }}"
+      - "kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=redis -n {{ .Block.Config.Namespace }} --timeout=300s"
+    config:
+      timeout: 600
+
+  - name: uninstall
+    description: "Uninstall Redis"
+    interactive: true
+    prompt:
+      message: "Are you sure you want to uninstall Redis? This will delete all data."
+    script:
+      - "helm uninstall {{ .Block.Name }} --namespace {{ .Block.Config.Namespace }}"
+      - "kubectl delete namespace {{ .Block.Config.Namespace }}"
+
+  - name: backup
+    description: "Create Redis backup"
+    script:
+      - "kubectl exec -n {{ .Block.Config.Namespace }} redis-master-0 -- redis-cli --rdb /tmp/dump.rdb BGSAVE"
+      - "kubectl cp {{ .Block.Config.Namespace }}/redis-master-0:/tmp/dump.rdb ./backup-$(date +%Y%m%d-%H%M%S).rdb"
+
+  - name: restore
+    description: "Restore Redis from backup"
+    interactive: true
+    prompt:
+      message: "Enter backup file path:"
+    script:
+      - "kubectl cp {{ .Prompt.Input }} {{ .Block.Config.Namespace }}/redis-master-0:/tmp/restore.rdb"
+      - "kubectl exec -n {{ .Block.Config.Namespace }} redis-master-0 -- redis-cli DEBUG RESTART"
+
+  - name: scale
+    description: "Scale Redis cluster"
+    interactive: true
+    prompt:
+      message: "Enter number of replica nodes:"
+    script:
+      - "helm upgrade {{ .Block.Name }} bitnami/redis --namespace {{ .Block.Config.Namespace }} --set replica.replicaCount={{ .Prompt.Input }}"
+
+  - name: health-check
+    description: "Check Redis health"
+    script:
+      - "kubectl exec -n {{ .Block.Config.Namespace }} redis-master-0 -- redis-cli ping"
+      - "kubectl exec -n {{ .Block.Config.Namespace }} redis-master-0 -- redis-cli info replication"
+
+supports_ha: true
+template: false
+from: "registry.polycrate.com/blocks/k8s-base:latest"
+
+workdir:
+  path: "/workspace/blocks/redis-cache"
+
+inventory:
+  path: "inventory.yml"
+  from: "workspace"
+  filename: "inventory.yml"
+
+kubeconfig:
+  path: "kubeconfig"
+  from: "workspace"
+  filename: "kubeconfig"
+
+artifacts:
+  path: "artifacts"

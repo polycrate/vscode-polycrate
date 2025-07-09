@@ -1,0 +1,119 @@
+# Example Polycrate workspace configuration
+name: my-webapp-workspace
+description: "A sample workspace for web application deployment"
+organization: my-company
+
+config:
+  image:
+    reference: "registry.polycrate.com/polycrate/polycrate"
+    version: "latest"
+  blocksroot: "blocks"
+  logsroot: "logs"
+  blocksconfig: "block.poly"
+  workspaceconfig: "workspace.poly"
+  workflowsroot: "workflows"
+  artifactsroot: "artifacts"
+  containerroot: "/workspace"
+  sshprivatekey: "id_rsa"
+  sshpublickey: "id_rsa.pub"
+  remoteroot: "/remote"
+  globals:
+    environment: "production"
+    region: "us-east-1"
+    domain: "example.com"
+
+labels:
+  environment: "production"
+  team: "backend"
+  project: "webapp"
+
+blocks:
+  - name: postgres-db
+    description: "PostgreSQL database for the application"
+    kind: k8sapp
+    type: db
+    flavor: postgresql
+    version: "14.0.0"
+    config:
+      persistence:
+        enabled: true
+        size: "20Gi"
+      connection:
+        username: "webapp_user"
+        password: "{{ .Workspace.Config.Globals.db_password }}"
+        database: "webapp_db"
+    actions:
+      - name: install
+        description: "Install PostgreSQL"
+        script:
+          - "helm install postgres bitnami/postgresql --set auth.postgresPassword={{ .Block.Config.Connection.Password }}"
+      - name: backup
+        description: "Create database backup"
+        script:
+          - "kubectl exec -it postgres-0 -- pg_dump -U postgres webapp_db > backup.sql"
+
+  - name: web-app
+    description: "Main web application"
+    kind: k8sapp
+    type: app
+    version: "1.0.0"
+    config:
+      replicas: 3
+      image: "webapp:latest"
+      port: 8080
+      environment:
+        - name: "DB_HOST"
+          value: "postgres"
+        - name: "DB_NAME"
+          value: "webapp_db"
+      ingress:
+        enabled: true
+        host: "app.{{ .Workspace.Config.Globals.domain }}"
+        class: "nginx"
+        tls:
+          enabled: true
+    actions:
+      - name: deploy
+        description: "Deploy web application"
+        script:
+          - "kubectl apply -f k8s/deployment.yaml"
+          - "kubectl apply -f k8s/service.yaml"
+          - "kubectl apply -f k8s/ingress.yaml"
+      - name: scale
+        description: "Scale application"
+        interactive: true
+        prompt:
+          message: "Enter number of replicas:"
+        script:
+          - "kubectl scale deployment web-app --replicas={{ .Prompt.Input }}"
+
+workflows:
+  - name: full-deploy
+    description: "Full deployment workflow"
+    steps:
+      - name: deploy-database
+        description: "Deploy PostgreSQL database"
+        block: postgres-db
+        action: install
+      - name: deploy-app
+        description: "Deploy web application"
+        block: web-app
+        action: deploy
+      - name: verify-deployment
+        description: "Verify deployment is successful"
+        script:
+          - "kubectl get pods -l app=web-app"
+          - "kubectl get pods -l app=postgres"
+
+inventory:
+  path: "inventory.yml"
+  filename: "inventory.yml"
+
+kubeconfig:
+  path: "kubeconfig"
+  filename: "kubeconfig"
+
+registry:
+  endpoint: "registry.polycrate.com"
+  username: "{{ .Workspace.Config.Globals.registry_username }}"
+  password: "{{ .Workspace.Config.Globals.registry_password }}"

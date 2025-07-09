@@ -1,0 +1,122 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Polycrate",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#polycrate-keys"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#booleans"
+    },
+    {
+      "include": "#templates"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.number-sign.polycrate",
+      "match": "#.*$"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.polycrate",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.polycrate",
+              "match": "\\\\."
+            },
+            {
+              "include": "#templates"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.polycrate",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.polycrate",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.polycrate",
+          "match": "\\b(true|false|null|yes|no|on|off)\\b"
+        }
+      ]
+    },
+    "polycrate-keys": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.polycrate.workspace",
+          "match": "\\b(name|description|organization|labels|alias|config|extraenv|extramounts|events|dependencies|sync|inventory|kubeconfig|registry|blocks|workflows)\\b(?=\\s*:)"
+        },
+        {
+          "name": "entity.name.tag.polycrate.block",
+          "match": "\\b(display_name|kind|type|flavor|version|icon_url|git_repository_url|license|license_url|website_url|documentation_url|releases_url|actions|supports_ha|template|from|workdir|artifacts)\\b(?=\\s*:)"
+        },
+        {
+          "name": "entity.name.tag.polycrate.config",
+          "match": "\\b(image|reference|blocksroot|logsroot|blocksconfig|workspaceconfig|workflowsroot|artifactsroot|containerroot|sshprivatekey|sshpublickey|remoteroot|dockerfile|globals|connection|endpoint|port|username|password|tls|namespace|create_namespace|chart|persistence|update_strategy|ingress|monitoring|backup)\\b(?=\\s*:)"
+        },
+        {
+          "name": "entity.name.tag.polycrate.action",
+          "match": "\\b(script|playbook|interactive|prompt|message|timeout|allow_failure|steps|block|action)\\b(?=\\s*:)"
+        },
+        {
+          "name": "keyword.other.polycrate.block-kind",
+          "match": "\\b(generic|k8sapp|k8scluster|db|kv|mq|app)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.polycrate",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "booleans": {
+      "name": "constant.language.boolean.polycrate",
+      "match": "\\b(true|false|yes|no|on|off)\\b"
+    },
+    "templates": {
+      "patterns": [
+        {
+          "name": "support.function.template.polycrate",
+          "begin": "\\{\\{",
+          "end": "\\}\\}",
+          "patterns": [
+            {
+              "name": "variable.other.template.polycrate",
+              "match": "\\.[A-Za-z_][A-Za-z0-9_]*"
+            },
+            {
+              "name": "keyword.control.template.polycrate",
+              "match": "\\b(if|else|end|range|with|define|template|block|include)\\b"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "scopeName": "source.polycrate"
+}
