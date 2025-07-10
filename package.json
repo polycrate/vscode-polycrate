@@ -2,7 +2,7 @@
   "name": "polycrate-vscode",
   "displayName": "Polycrate DevOps Platform",
   "description": "🚀 Complete VS Code extension for Polycrate DevOps platform: IntelliSense, validation, version diff, Hub integration & more",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "ayedo-cloud-solutions",
   "author": {
     "name": "Ayedo Cloud Solutions GmbH",
