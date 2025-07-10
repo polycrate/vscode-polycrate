@@ -41,12 +41,15 @@ export function activate(context: vscode.ExtensionContext) {
     }
     
     // Command provider
-    const commandProvider = new PolycrateCommandProvider();
+    const commandProvider = new PolycrateCommandProvider(context);
     context.subscriptions.push(
         vscode.commands.registerCommand('polycrate.validateWorkspace', commandProvider.validateWorkspace),
         vscode.commands.registerCommand('polycrate.validateBlock', commandProvider.validateBlock),
         vscode.commands.registerCommand('polycrate.searchBlocks', commandProvider.searchBlocks),
-        vscode.commands.registerCommand('polycrate.showBlockChangelog', commandProvider.showBlockChangelog)
+        vscode.commands.registerCommand('polycrate.showBlockChangelog', commandProvider.showBlockChangelog),
+        vscode.commands.registerCommand('polycrate.showBlockVersionDiff', commandProvider.showBlockVersionDiff),
+        vscode.commands.registerCommand('polycrate.compareBlockVersions', commandProvider.compareBlockVersions),
+        vscode.commands.registerCommand('polycrate.discoverBlocks', commandProvider.discoverBlocks)
     );
 }
 

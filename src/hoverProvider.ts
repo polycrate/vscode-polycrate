@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 export class PolycrateHoverProvider implements vscode.HoverProvider {
     
-    public provideHover(
+    public async provideHover(
         document: vscode.TextDocument,
         position: vscode.Position,
         token: vscode.CancellationToken
-    ): vscode.ProviderResult<vscode.Hover> {
+    ): Promise<vscode.Hover | null> {
         
         const range = document.getWordRangeAtPosition(position);
         if (!range) {
@@ -17,6 +18,12 @@ export class PolycrateHoverProvider implements vscode.HoverProvider {
         const line = document.lineAt(position);
         const lineText = line.text;
         
+        // Check if we're in a block config section
+        const blockConfigPreview = await this.getBlockConfigPreview(document, position);
+        if (blockConfigPreview) {
+            return new vscode.Hover(blockConfigPreview, range);
+        }
+        
         // Check if the word is a Polycrate keyword
         const hoverInfo = this.getHoverInfo(word, lineText);
         
@@ -25,6 +32,152 @@ export class PolycrateHoverProvider implements vscode.HoverProvider {
         }
         
         return null;
+    }
+
+    private async getBlockConfigPreview(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.MarkdownString | null> {
+        try {
+            const fileName = path.basename(document.uri.fsPath);
+            
+            // Only show preview for workspace.poly files
+            if (fileName !== 'workspace.poly') {
+                return null;
+            }
+            
+            // Check if we're in a block config section
+            const blockInfo = this.getBlockContextAtPosition(document, position);
+            if (!blockInfo) {
+                return null;
+            }
+            
+            // Find the block.poly file for this block
+            const blockConfig = await this.loadBlockConfig(blockInfo.blockName, document.uri.fsPath);
+            if (!blockConfig) {
+                return null;
+            }
+            
+            // Create preview markdown
+            const markdown = new vscode.MarkdownString();
+            markdown.isTrusted = true;
+            markdown.supportHtml = true;
+            
+            markdown.appendMarkdown(`**Block Config Preview for '${blockInfo.blockName}'**\n\n`);
+            
+            if (blockConfig.config) {
+                markdown.appendMarkdown('**Available configuration options:**\n\n');
+                markdown.appendCodeblock(this.formatConfigPreview(blockConfig.config), 'yaml');
+            } else {
+                markdown.appendMarkdown('*No configuration options defined in block.poly*');
+            }
+            
+            if (blockConfig.description) {
+                markdown.appendMarkdown(`\n\n**Description:** ${blockConfig.description}`);
+            }
+            
+            return markdown;
+            
+        } catch (error) {
+            console.error('Error generating block config preview:', error);
+            return null;
+        }
+    }
+
+    private getBlockContextAtPosition(document: vscode.TextDocument, position: vscode.Position): { blockName: string; isInConfig: boolean } | null {
+        const text = document.getText();
+        let currentBlockName: string | null = null;
+        let isInConfig = false;
+        
+        // Parse the document to find which block we're in
+        const lines = text.split('\n');
+        let currentLine = 0;
+        let blockIndent = -1;
+        let configIndent = -1;
+        
+        for (let i = 0; i <= position.line; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            const lineIndent = line.length - line.trimStart().length;
+            
+            // Check if we're starting a new block
+            if (trimmedLine.startsWith('- name:')) {
+                const nameMatch = trimmedLine.match(/- name:\s*(.+)/);
+                if (nameMatch) {
+                    currentBlockName = nameMatch[1].replace(/['"]/g, '');
+                    blockIndent = lineIndent;
+                    isInConfig = false;
+                    configIndent = -1;
+                }
+            }
+            // Check if we're in a config section
+            else if (currentBlockName && trimmedLine === 'config:' && lineIndent > blockIndent) {
+                isInConfig = true;
+                configIndent = lineIndent;
+            }
+            // Check if we've left the config section
+            else if (isInConfig && lineIndent <= configIndent && trimmedLine !== '') {
+                isInConfig = false;
+            }
+            // Check if we've left the current block
+            else if (currentBlockName && lineIndent <= blockIndent && trimmedLine !== '' && !trimmedLine.startsWith('- name:')) {
+                currentBlockName = null;
+                isInConfig = false;
+            }
+        }
+        
+        if (currentBlockName && isInConfig) {
+            return { blockName: currentBlockName, isInConfig: true };
+        }
+        
+        return null;
+    }
+
+    private async loadBlockConfig(blockName: string, workspaceFilePath: string): Promise<any> {
+        try {
+            const workspaceDir = path.dirname(workspaceFilePath);
+            const blockDir = path.join(workspaceDir, 'blocks', blockName);
+            const blockPolyPath = path.join(blockDir, 'block.poly');
+            
+            // Try to read the block.poly file
+            const fs = require('fs');
+            if (!fs.existsSync(blockPolyPath)) {
+                return null;
+            }
+            
+            const blockContent = fs.readFileSync(blockPolyPath, 'utf8');
+            
+            // Parse YAML
+            let yaml;
+            try {
+                yaml = require('yaml');
+            } catch (requireError) {
+                return null;
+            }
+            
+            return yaml.parse(blockContent);
+            
+        } catch (error) {
+            console.error('Error loading block config:', error);
+            return null;
+        }
+    }
+
+    private formatConfigPreview(config: any, indent: string = ''): string {
+        let result = '';
+        
+        if (typeof config === 'object' && config !== null) {
+            for (const [key, value] of Object.entries(config)) {
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    result += `${indent}${key}:\n`;
+                    result += this.formatConfigPreview(value, indent + '  ');
+                } else if (Array.isArray(value)) {
+                    result += `${indent}${key}:\n`;
+                    result += `${indent}  - # Array items\n`;
+                } else {
+                    result += `${indent}${key}: ${value}\n`;
+                }
+            }
+        }
+        
+        return result;
     }
 
     private getHoverInfo(word: string, lineText: string): vscode.MarkdownString | null {

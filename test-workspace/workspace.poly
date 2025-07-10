@@ -1,0 +1,8 @@
+name: test-workspace
+organization: test-org
+description: "Test workspace for extension validation"
+
+blocks:
+  - name: test-block
+    kind: generic
+    description: "A test block"

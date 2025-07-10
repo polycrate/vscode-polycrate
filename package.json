@@ -1,23 +1,15 @@
 {
   "name": "polycrate-vscode",
-  "displayName": "Polycrate Language Support",
-  "description": "Language support for Polycrate workspace and block files",
+  "displayName": "Polycrate DevOps Platform",
+  "description": "🚀 Complete VS Code extension for Polycrate DevOps platform: IntelliSense, validation, version diff, Hub integration & more",
   "version": "0.1.0",
-  "engines": {
-    "vscode": "^1.74.0"
+  "publisher": "ayedo-cloud-solutions",
+  "author": {
+    "name": "Ayedo Cloud Solutions GmbH",
+    "email": "info@ayedo.de",
+    "url": "https://ayedo.de"
   },
-  "categories": [
-    "Programming Languages",
-    "Linters",
-    "Formatters"
-  ],
-  "keywords": [
-    "polycrate",
-    "infrastructure",
-    "yaml",
-    "blocks",
-    "workspace"
-  ],
+  "homepage": "https://ayedo.de",
   "repository": {
     "type": "git",
     "url": "https://github.com/ayedo/polycrate-vscode.git"
@@ -25,7 +17,37 @@
   "bugs": {
     "url": "https://github.com/ayedo/polycrate-vscode/issues"
   },
-  "homepage": "https://github.com/ayedo/polycrate-vscode#readme",
+  "sponsor": {
+    "url": "https://ayedo.de"
+  },
+  "icon": "polycrate-logo.png",
+  "galleryBanner": {
+    "color": "#68369b",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets",
+    "Formatters"
+  ],
+  "keywords": [
+    "polycrate",
+    "devops",
+    "infrastructure",
+    "automation",
+    "yaml",
+    "kubernetes",
+    "containers",
+    "blocks",
+    "workspace",
+    "ayedo",
+    "hub",
+    "registry"
+  ],
   "license": "MIT",
   "activationEvents": [
     "onLanguage:polycrate"
@@ -35,8 +57,13 @@
     "languages": [
       {
         "id": "polycrate",
-        "aliases": ["Polycrate", "polycrate"],
-        "extensions": [".poly"],
+        "aliases": [
+          "Polycrate",
+          "polycrate"
+        ],
+        "extensions": [
+          ".poly"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -93,6 +120,21 @@
         "command": "polycrate.showBlockChangelog",
         "title": "Show Block Changelog",
         "category": "Polycrate"
+      },
+      {
+        "command": "polycrate.showBlockVersionDiff",
+        "title": "Show Block Version Diff",
+        "category": "Polycrate"
+      },
+      {
+        "command": "polycrate.compareBlockVersions",
+        "title": "Compare Block Versions",
+        "category": "Polycrate"
+      },
+      {
+        "command": "polycrate.discoverBlocks",
+        "title": "Discover Blocks from Hub",
+        "category": "Polycrate"
       }
     ],
     "menus": {
@@ -106,6 +148,11 @@
           "when": "resourceExtname == .poly",
           "command": "polycrate.validateBlock",
           "group": "polycrate"
+        },
+        {
+          "when": "resourceExtname == .poly",
+          "command": "polycrate.compareBlockVersions",
+          "group": "polycrate"
         }
       ],
       "editor/context": [
@@ -118,29 +165,40 @@
           "when": "resourceExtname == .poly",
           "command": "polycrate.validateBlock",
           "group": "polycrate"
+        },
+        {
+          "when": "resourceExtname == .poly",
+          "command": "polycrate.compareBlockVersions",
+          "group": "polycrate"
         }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run package",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
     "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
     "eslint": "^8.28.0",
+    "ts-loader": "^9.5.2",
     "typescript": "^4.9.4",
-    "@vscode/test-electron": "^2.2.0"
+    "webpack": "^5.100.0",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "yaml": "^2.3.4",
-    "ajv": "^8.12.0"
+    "ajv": "^8.12.0",
+    "yaml": "^2.3.4"
   }
 }

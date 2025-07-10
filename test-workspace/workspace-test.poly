@@ -1,0 +1,22 @@
+name: test-workspace
+organization: test-org
+description: "Test workspace with errors"
+
+blocks:
+  - name: block1
+    description: "Block without kind"
+    # missing kind field - should show error at this block
+    
+  - name: block2
+    kind: invalid-kind  # invalid kind - should show error at this line
+    description: "Block with invalid kind"
+    
+  - name: block3
+    kind: generic
+    from: "registry.example.com/blocks/base"  # missing version - should show warning at this line
+    description: "Block with missing version"
+    
+  - name: block4
+    kind: generic
+    from: "registry.example.com/blocks/base:latest"  # latest tag - should show warning at this line
+    description: "Block with latest tag"

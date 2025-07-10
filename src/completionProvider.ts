@@ -38,7 +38,7 @@ export class PolycrateCompletionProvider implements vscode.CompletionItemProvide
             { name: 'organization', detail: 'Organization name (required)', documentation: 'The organization this workspace belongs to' },
             { name: 'labels', detail: 'Workspace labels', documentation: 'Key-value pairs for labeling the workspace' },
             { name: 'alias', detail: 'Workspace aliases', documentation: 'Alternative names for the workspace' },
-            { name: 'config', detail: 'Workspace configuration (required)', documentation: 'Configuration settings for the workspace' },
+            { name: 'config', detail: 'Workspace configuration (optional)', documentation: 'Configuration settings for the workspace. CLI provides defaults if not specified.' },
             { name: 'extraenv', detail: 'Extra environment variables', documentation: 'Additional environment variables' },
             { name: 'extramounts', detail: 'Extra volume mounts', documentation: 'Additional volume mounts for containers' },
             { name: 'events', detail: 'Event handlers', documentation: 'Event handling configuration' },
@@ -54,8 +54,8 @@ export class PolycrateCompletionProvider implements vscode.CompletionItemProvide
         // Config section fields
         const configFields = [
             { name: 'image', detail: 'Container image configuration', documentation: 'Container image settings' },
-            { name: 'blocksroot', detail: 'Blocks directory (required)', documentation: 'Directory containing blocks' },
-            { name: 'logsroot', detail: 'Logs directory (required)', documentation: 'Directory for storing logs' },
+            { name: 'blocksroot', detail: 'Blocks directory (default: blocks)', documentation: 'Directory containing blocks' },
+            { name: 'logsroot', detail: 'Logs directory (default: logs)', documentation: 'Directory for storing logs' },
             { name: 'blocksconfig', detail: 'Block config filename', documentation: 'Filename for block configuration' },
             { name: 'workspaceconfig', detail: 'Workspace config filename', documentation: 'Filename for workspace configuration' },
             { name: 'workflowsroot', detail: 'Workflows directory', documentation: 'Directory containing workflows' },
@@ -72,6 +72,8 @@ export class PolycrateCompletionProvider implements vscode.CompletionItemProvide
         const isInConfig = this.isInSection(linePrefix, 'config');
         
         if (isInConfig) {
+            // Fall back to general config fields for now
+            // TODO: Implement block config completions
             configFields.forEach(field => {
                 const item = new vscode.CompletionItem(field.name, vscode.CompletionItemKind.Property);
                 item.detail = field.detail;
@@ -100,7 +102,7 @@ export class PolycrateCompletionProvider implements vscode.CompletionItemProvide
             { name: 'name', detail: 'Block name (required)', documentation: 'The name of the block' },
             { name: 'display_name', detail: 'Display name', documentation: 'Human-readable name for the block' },
             { name: 'description', detail: 'Block description', documentation: 'A description of the block' },
-            { name: 'kind', detail: 'Block kind (required)', documentation: 'The type of block (generic, k8sapp, etc.)' },
+            { name: 'kind', detail: 'Block kind (optional)', documentation: 'The type of block (generic, k8sapp, etc.)' },
             { name: 'type', detail: 'Block type', documentation: 'The application type (db, kv, mq, etc.)' },
             { name: 'flavor', detail: 'Block flavor', documentation: 'Specific flavor or variant' },
             { name: 'version', detail: 'Block version', documentation: 'Version of the block' },
@@ -154,6 +156,146 @@ export class PolycrateCompletionProvider implements vscode.CompletionItemProvide
         }
         
         return completions;
+    }
+
+    private getBlockConfigCompletionsSync(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
+        const completions: vscode.CompletionItem[] = [];
+        
+        try {
+            // Check if we're in a block config section
+            const blockInfo = this.getBlockContextAtPosition(document, position);
+            if (!blockInfo) {
+                return completions;
+            }
+            
+            // Load the block.poly file
+            const blockConfig = this.loadBlockConfigSync(blockInfo.blockName, document.uri.fsPath);
+            if (!blockConfig || !blockConfig.config) {
+                return completions;
+            }
+            
+            // Generate completions from block config
+            this.generateConfigCompletions(blockConfig.config, completions);
+            
+        } catch (error) {
+            console.error('Error generating block config completions:', error);
+        }
+        
+        return completions;
+    }
+
+    private getBlockContextAtPosition(document: vscode.TextDocument, position: vscode.Position): { blockName: string; isInConfig: boolean } | null {
+        const text = document.getText();
+        let currentBlockName: string | null = null;
+        let isInConfig = false;
+        
+        // Parse the document to find which block we're in
+        const lines = text.split('\n');
+        let blockIndent = -1;
+        let configIndent = -1;
+        
+        for (let i = 0; i <= position.line; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            const lineIndent = line.length - line.trimStart().length;
+            
+            // Check if we're starting a new block
+            if (trimmedLine.startsWith('- name:')) {
+                const nameMatch = trimmedLine.match(/- name:\s*(.+)/);
+                if (nameMatch) {
+                    currentBlockName = nameMatch[1].replace(/['"]/g, '');
+                    blockIndent = lineIndent;
+                    isInConfig = false;
+                    configIndent = -1;
+                }
+            }
+            // Check if we're in a config section
+            else if (currentBlockName && trimmedLine === 'config:' && lineIndent > blockIndent) {
+                isInConfig = true;
+                configIndent = lineIndent;
+            }
+            // Check if we've left the config section
+            else if (isInConfig && lineIndent <= configIndent && trimmedLine !== '') {
+                isInConfig = false;
+            }
+            // Check if we've left the current block
+            else if (currentBlockName && lineIndent <= blockIndent && trimmedLine !== '' && !trimmedLine.startsWith('- name:')) {
+                currentBlockName = null;
+                isInConfig = false;
+            }
+        }
+        
+        if (currentBlockName && isInConfig) {
+            return { blockName: currentBlockName, isInConfig: true };
+        }
+        
+        return null;
+    }
+
+    private loadBlockConfigSync(blockName: string, workspaceFilePath: string): any {
+        try {
+            const workspaceDir = path.dirname(workspaceFilePath);
+            const blockDir = path.join(workspaceDir, 'blocks', blockName);
+            const blockPolyPath = path.join(blockDir, 'block.poly');
+            
+            // Try to read the block.poly file
+            const fs = require('fs');
+            if (!fs.existsSync(blockPolyPath)) {
+                return null;
+            }
+            
+            const blockContent = fs.readFileSync(blockPolyPath, 'utf8');
+            
+            // Parse YAML
+            let yaml;
+            try {
+                yaml = require('yaml');
+            } catch (requireError) {
+                return null;
+            }
+            
+            return yaml.parse(blockContent);
+            
+        } catch (error) {
+            console.error('Error loading block config:', error);
+            return null;
+        }
+    }
+
+    private generateConfigCompletions(config: any, completions: vscode.CompletionItem[], prefix: string = ''): void {
+        if (typeof config === 'object' && config !== null) {
+            for (const [key, value] of Object.entries(config)) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                
+                let item: vscode.CompletionItem;
+                
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    // Nested object
+                    item = new vscode.CompletionItem(key, vscode.CompletionItemKind.Property);
+                    item.detail = 'Configuration section';
+                    item.documentation = `Configuration section for ${key}`;
+                    item.insertText = `${key}:\n  `;
+                    item.command = {
+                        command: 'editor.action.triggerSuggest',
+                        title: 'Re-trigger completions'
+                    };
+                } else if (Array.isArray(value)) {
+                    // Array
+                    item = new vscode.CompletionItem(key, vscode.CompletionItemKind.Property);
+                    item.detail = 'Array configuration';
+                    item.documentation = `Array configuration for ${key}`;
+                    item.insertText = `${key}:\n  - `;
+                } else {
+                    // Simple value
+                    item = new vscode.CompletionItem(key, vscode.CompletionItemKind.Property);
+                    item.detail = `Default: ${value}`;
+                    item.documentation = `Configuration option for ${key}`;
+                    item.insertText = `${key}: ${value}`;
+                }
+                
+                completions.push(item);
+            }
+        }
     }
 
     private isInSection(linePrefix: string, sectionName: string): boolean {

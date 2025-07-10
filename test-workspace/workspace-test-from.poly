@@ -1,0 +1,19 @@
+name: test-workspace-from
+organization: test-org
+description: "Test workspace for from field validation"
+
+blocks:
+  - name: block1
+    kind: generic
+    from: "otherblock/otherblock"  # missing version - should show warning
+    description: "Block 1 without version"
+    
+  - name: block2
+    kind: generic
+    from: "otherblock/otherblock"  # missing version - should show warning
+    description: "Block 2 without version"
+    
+  - name: block3
+    kind: generic
+    from: "otherblock/otherblock"  # missing version - should show warning
+    description: "Block 3 without version"

@@ -1,12 +1,18 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { PolycrateVersionDiffProvider } from './versionDiffProvider';
+import { PolycrateHubIntegrationProvider } from './hubIntegrationProvider';
 
 export class PolycrateCommandProvider {
     private outputChannel: vscode.OutputChannel;
+    private versionDiffProvider: PolycrateVersionDiffProvider;
+    private hubIntegrationProvider: PolycrateHubIntegrationProvider;
 
-    constructor() {
+    constructor(context: vscode.ExtensionContext) {
         this.outputChannel = vscode.window.createOutputChannel('Polycrate Commands');
+        this.versionDiffProvider = new PolycrateVersionDiffProvider(context);
+        this.hubIntegrationProvider = new PolycrateHubIntegrationProvider(context);
     }
 
     public validateWorkspace = async (): Promise<void> => {
@@ -145,6 +151,38 @@ export class PolycrateCommandProvider {
                 vscode.window.showErrorMessage(`Failed to fetch changelog: ${cmdError}`);
             }
         }
+    };
+
+    public showBlockVersionDiff = async (): Promise<void> => {
+        await this.versionDiffProvider.showBlockVersionDiff();
+    };
+
+    public compareBlockVersions = async (): Promise<void> => {
+        // Get the current block name from active editor
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor) {
+            vscode.window.showErrorMessage('No active editor');
+            return;
+        }
+
+        const document = activeEditor.document;
+        const fileName = path.basename(document.fileName);
+        
+        if (fileName === 'block.poly') {
+            // Extract block name from directory
+            const blockDir = path.dirname(document.fileName);
+            const blockName = path.basename(blockDir);
+            await this.versionDiffProvider.showBlockVersionDiff(blockName);
+        } else if (fileName === 'workspace.poly') {
+            // Let user choose block from workspace
+            await this.versionDiffProvider.showBlockVersionDiff();
+        } else {
+            vscode.window.showErrorMessage('Please open a block.poly or workspace.poly file');
+        }
+    };
+
+    public discoverBlocks = async (): Promise<void> => {
+        await this.hubIntegrationProvider.discoverBlocks();
     };
 
     private async runPolycrateCommand(args: string[], cwd?: string): Promise<string> {

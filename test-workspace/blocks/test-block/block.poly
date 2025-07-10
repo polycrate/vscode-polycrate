@@ -1,0 +1,36 @@
+name: test-block
+display_name: "Test Block"
+description: "A test block for demonstrating version diff functionality"
+kind: generic
+version: "1.0.0"
+type: app
+flavor: nodejs
+
+config:
+  port: 3000
+  environment: production
+  database:
+    host: localhost
+    port: 5432
+    name: testdb
+  features:
+    - authentication
+    - logging
+    - monitoring
+  
+actions:
+  - name: install
+    description: "Install the application"
+    script:
+      - "npm install"
+      - "npm run build"
+  
+  - name: start
+    description: "Start the application"  
+    script:
+      - "npm start"
+  
+  - name: test
+    description: "Run tests"
+    script:
+      - "npm test"
