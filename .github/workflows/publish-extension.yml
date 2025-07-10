@@ -1,0 +1,114 @@
+name: 🚀 Publish VS Code Extension
+
+on:
+  # Automatisch bei Git Tags
+  push:
+    tags:
+      - 'v*'
+  
+  # Manuell über GitHub UI
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version type to publish'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+jobs:
+  publish:
+    name: 📦 Build & Publish Extension
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Für GitHub Releases
+      id-token: write  # Für OIDC Authentication
+    
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Für Git-basierte Version detection
+    
+    - name: 🚀 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: 📦 Install Dependencies
+      run: |
+        npm ci
+        npm install -g vsce@latest
+    
+    - name: 🔍 Validate Package
+      run: |
+        npm run compile
+        npm run package
+    
+    - name: 📋 Package Extension
+      run: |
+        vsce package
+        echo "VSIX_FILE=$(ls *.vsix)" >> $GITHUB_ENV
+    
+    - name: 🌐 Publish to Marketplace (Git Tag)
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      env:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      run: |
+        echo "Publishing extension to VS Code Marketplace..."
+        vsce publish --azure-credential
+    
+    - name: 🎯 Publish to Marketplace (Manual)
+      if: github.event_name == 'workflow_dispatch'
+      env:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      run: |
+        echo "Publishing extension with version type: ${{ github.event.inputs.version_type }}"
+        vsce publish ${{ github.event.inputs.version_type }} --azure-credential
+    
+    - name: 📤 Upload VSIX as Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: extension-vsix
+        path: "*.vsix"
+        retention-days: 30
+    
+    - name: 🏷️ Create GitHub Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: "*.vsix"
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Test installation
+  test-installation:
+    name: 🧪 Test Extension Installation
+    runs-on: ubuntu-latest
+    needs: publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: 📥 Download Extension Artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: extension-vsix
+    
+    - name: 🔧 Test Extension Installation
+      run: |
+        VSIX_FILE=$(ls *.vsix)
+        echo "Found VSIX file: $VSIX_FILE"
+        # VS Code installation test würde hier stehen
+        # code --install-extension "$VSIX_FILE" --force
