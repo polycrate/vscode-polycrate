@@ -58,22 +58,18 @@ jobs:
     - name: 🌐 Publish to Marketplace (Git Tag)
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
       env:
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
       run: |
         echo "Publishing extension to VS Code Marketplace..."
-        vsce publish --azure-credential
+        vsce publish --pat $VSCE_PAT
     
     - name: 🎯 Publish to Marketplace (Manual)
       if: github.event_name == 'workflow_dispatch'
       env:
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
       run: |
         echo "Publishing extension with version type: ${{ github.event.inputs.version_type }}"
-        vsce publish ${{ github.event.inputs.version_type }} --azure-credential
+        vsce publish ${{ github.event.inputs.version_type }} --pat $VSCE_PAT
     
     - name: 📤 Upload VSIX as Artifact
       uses: actions/upload-artifact@v4

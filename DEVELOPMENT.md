@@ -300,17 +300,46 @@ npx vsce login ayedo-cloud-solutions
 npx vsce verify-pat [YOUR_PAT_TOKEN]
 ```
 
-**🔐 CI/CD Pipeline Authentication**
+**🔐 Azure DevOps Pipeline (Service Principal)**
 ```yaml
-# Azure DevOps Pipeline (azure-pipelines.yml)
-steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '16.x'
-- script: npm install -g vsce
-- script: vsce publish --pat $(VSCE_PAT)
-  env:
-    VSCE_PAT: $(marketplace-pat)  # Secret Variable
+# azure-pipelines.yml - Mit Service Principal für Azure DevOps
+variables:
+- group: 'marketplace-secrets'
+
+stages:
+- stage: Publish
+  jobs:
+  - job: PublishExtension
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+    
+    - script: |
+        npm ci
+        npm install -g vsce@latest
+      displayName: 'Install dependencies'
+    
+    - script: |
+        npm run compile
+        npm run package
+        vsce package
+      displayName: 'Build extension'
+    
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'ayedo-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Service Principal kann für Azure DevOps verwendet werden
+          # GitHub Actions benötigt PAT
+          vsce publish --pat $(marketplace-pat)
+      displayName: 'Publish Extension'
+      env:
+        VSCE_PAT: $(marketplace-pat)
 ```
 
 #### **2. Extension veröffentlichen**
@@ -513,22 +542,18 @@ jobs:
     - name: 🌐 Publish to Marketplace
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
       env:
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
       run: |
         echo "Publishing extension to VS Code Marketplace..."
-        vsce publish --azure-credential
+        vsce publish --pat $VSCE_PAT
     
     - name: 🎯 Manual Publish (Workflow Dispatch)
       if: github.event_name == 'workflow_dispatch'
       env:
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
       run: |
         echo "Publishing extension with version type: ${{ github.event.inputs.version_type }}"
-        vsce publish ${{ github.event.inputs.version_type }} --azure-credential
+        vsce publish ${{ github.event.inputs.version_type }} --pat $VSCE_PAT
     
     - name: 📤 Upload VSIX as Artifact
       uses: actions/upload-artifact@v4
@@ -577,13 +602,11 @@ jobs:
 ```bash
 # GitHub Repository > Settings > Secrets and variables > Actions
 
-# Secrets hinzufügen:
-AZURE_CLIENT_ID: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-AZURE_CLIENT_SECRET: "your-service-principal-secret"
-AZURE_TENANT_ID: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
-# Optional: Personal Access Token als Fallback
+# Required Secret:
 VSCE_PAT: "your-personal-access-token"
+
+# Hinweis: Azure Service Principal wird derzeit von vsce nicht unterstützt
+# Verwenden Sie Personal Access Token für GitHub Actions Publishing
 ```
 
 #### **2. Repository Permissions**
