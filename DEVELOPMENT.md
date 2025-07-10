@@ -531,7 +531,7 @@ jobs:
         vsce publish ${{ github.event.inputs.version_type }} --azure-credential
     
     - name: 📤 Upload VSIX as Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: extension-vsix
         path: "*.vsix"
@@ -539,14 +539,12 @@ jobs:
     
     - name: 🏷️ Create GitHub Release
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: "*.vsix"
         generate_release_notes: true
         draft: false
         prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Optional: Pre-release testing
   test-installation:
@@ -557,7 +555,7 @@ jobs:
     
     steps:
     - name: 📥 Download Extension Artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: extension-vsix
     
